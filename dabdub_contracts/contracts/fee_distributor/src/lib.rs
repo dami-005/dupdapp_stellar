@@ -41,6 +41,12 @@ struct LpAddressUpdatedEvent {
     new_lp_address: Address,
 }
 
+#[contracttype]
+struct AdminUpdatedEvent {
+    old_admin: Address,
+    new_admin: Address,
+}
+
 #[contract]
 pub struct FeeDistributorContract;
 
@@ -161,6 +167,24 @@ impl FeeDistributorContract {
         caller.require_auth();
         Self::require_admin(&env, &caller);
         env.storage().instance().set(&DataKey::AllowedCaller, &allowed_caller);
+    }
+
+    /// Rotate the admin address. Admin-only.
+    /// Persists `new_admin` to `DataKey::Admin` so subsequent `require_admin`
+    /// checks (set_lp_share, set_treasury, set_lp_address, set_allowed_caller,
+    /// and future rotations) use the rotated key.
+    pub fn transfer_admin(env: Env, caller: Address, new_admin: Address) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        let old_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.events().publish(
+            ("FEE_DISTRIBUTOR", "admin_updated"),
+            AdminUpdatedEvent {
+                old_admin,
+                new_admin,
+            },
+        );
     }
 
     pub fn get_config(env: Env) -> (Address, Address, i128) {

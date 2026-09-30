@@ -185,3 +185,36 @@ fn test_rotate_allowed_caller() {
     assert_eq!(s.token.balance(&s.treasury), 10_000);
     assert_eq!(s.token.balance(&s.lp), 10_000);
 }
+
+#[test]
+fn test_transfer_admin_rotates_admin() {
+    let s = setup(5_000);
+    let new_admin = Address::generate(&s.env);
+
+    // Rotate admin
+    s.client.transfer_admin(&s.admin, &new_admin);
+
+    // Old admin can no longer perform gated calls
+    let res = s.client.try_set_lp_share(&s.admin, &2_000);
+    assert!(res.is_err());
+
+    // New admin can perform gated calls
+    s.client.set_lp_share(&new_admin, &2_000);
+    let (_, _, bps) = s.client.get_config();
+    assert_eq!(bps, 2_000);
+}
+
+#[test]
+fn test_transfer_admin_rejects_non_admin() {
+    let s = setup(5_000);
+    let stranger = Address::generate(&s.env);
+    let new_admin = Address::generate(&s.env);
+
+    let res = s.client.try_transfer_admin(&stranger, &new_admin);
+    assert!(res.is_err());
+
+    // Admin unchanged: original admin still works
+    s.client.set_lp_share(&s.admin, &2_000);
+    let (_, _, bps) = s.client.get_config();
+    assert_eq!(bps, 2_000);
+}
