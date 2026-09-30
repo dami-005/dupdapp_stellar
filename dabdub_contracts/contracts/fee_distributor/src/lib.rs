@@ -13,6 +13,7 @@ enum DataKey {
     LpAddress,
     LpShareBps,
     UsdcToken,
+    AllowedCaller,
 }
 
 #[contracttype]
@@ -34,6 +35,7 @@ impl FeeDistributorContract {
         lp_address: Address,
         lp_share_bps: i128,
         usdc_token: Address,
+        allowed_caller: Address,
     ) {
         assert!(lp_share_bps >= 0 && lp_share_bps <= BPS_DENOM, "bps out of range");
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -41,12 +43,15 @@ impl FeeDistributorContract {
         env.storage().instance().set(&DataKey::LpAddress, &lp_address);
         env.storage().instance().set(&DataKey::LpShareBps, &lp_share_bps);
         env.storage().instance().set(&DataKey::UsdcToken, &usdc_token);
+        env.storage().instance().set(&DataKey::AllowedCaller, &allowed_caller);
     }
 
     /// Splits `total_fee` between treasury and LP atomically.
-    /// Caller must have pre-approved this contract to transfer `total_fee` tokens.
+    /// Only the configured `allowed_caller` may invoke this; the caller must
+    /// have pre-approved this contract to transfer `total_fee` tokens.
     pub fn distribute(env: Env, caller: Address, total_fee: i128) {
         caller.require_auth();
+        Self::require_allowed_caller(&env, &caller);
         assert!(total_fee > 0, "total_fee must be > 0");
 
         let lp_share_bps: i128 = env.storage().instance().get(&DataKey::LpShareBps).unwrap();
@@ -106,6 +111,13 @@ impl FeeDistributorContract {
         env.storage().instance().set(&DataKey::LpAddress, &lp_address);
     }
 
+    /// Rotate the address permitted to call `distribute`. Admin-only.
+    pub fn set_allowed_caller(env: Env, caller: Address, allowed_caller: Address) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        env.storage().instance().set(&DataKey::AllowedCaller, &allowed_caller);
+    }
+
     pub fn get_config(env: Env) -> (Address, Address, i128) {
         let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
         let lp_address: Address = env.storage().instance().get(&DataKey::LpAddress).unwrap();
@@ -113,8 +125,17 @@ impl FeeDistributorContract {
         (treasury, lp_address, lp_share_bps)
     }
 
+    pub fn get_allowed_caller(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::AllowedCaller).unwrap()
+    }
+
     fn require_admin(env: &Env, caller: &Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         assert!(caller == &admin, "not admin");
+    }
+
+    fn require_allowed_caller(env: &Env, caller: &Address) {
+        let allowed: Address = env.storage().instance().get(&DataKey::AllowedCaller).unwrap();
+        assert!(caller == &allowed, "caller not allowed");
     }
 }

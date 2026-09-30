@@ -36,7 +36,7 @@ fn setup(lp_share_bps: i128) -> Setup<'static> {
 
     let contract_id = env.register(
         FeeDistributorContract,
-        (&admin, &treasury, &lp, lp_share_bps, &token_id.address()),
+        (&admin, &treasury, &lp, lp_share_bps, &token_id.address(), &caller),
     );
 
     let client = FeeDistributorContractClient::new(&env, &contract_id);
@@ -110,4 +110,40 @@ fn test_update_addresses() {
     // old addresses untouched
     assert_eq!(s.token.balance(&s.treasury), 0);
     assert_eq!(s.token.balance(&s.lp), 0);
+}
+
+#[test]
+fn test_unauthorized_caller_rejected() {
+    let s = setup(5_000);
+    let stranger = Address::generate(&s.env);
+    let sac = StellarAssetClient::new(&s.env, &s.token.address);
+    sac.mint(&stranger, &10_000);
+    let res = s.client.try_distribute(&stranger, &10_000);
+    assert!(res.is_err());
+    assert_eq!(s.token.balance(&s.treasury), 0);
+    assert_eq!(s.token.balance(&s.lp), 0);
+}
+
+#[test]
+fn test_rotate_allowed_caller() {
+    let s = setup(5_000);
+    let new_caller = Address::generate(&s.env);
+    let sac = StellarAssetClient::new(&s.env, &s.token.address);
+    sac.mint(&new_caller, &10_000);
+
+    // Old caller works before rotation
+    s.client.distribute(&s.caller, &10_000);
+    assert_eq!(s.token.balance(&s.treasury), 5_000);
+
+    // Rotate to new caller
+    s.client.set_allowed_caller(&s.admin, &new_caller);
+
+    // Old caller now rejected
+    let res = s.client.try_distribute(&s.caller, &10_000);
+    assert!(res.is_err());
+
+    // New caller works
+    s.client.distribute(&new_caller, &10_000);
+    assert_eq!(s.token.balance(&s.treasury), 10_000);
+    assert_eq!(s.token.balance(&s.lp), 10_000);
 }
