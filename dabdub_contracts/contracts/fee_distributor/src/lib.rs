@@ -62,6 +62,13 @@ impl FeeDistributorContract {
         allowed_caller: Address,
     ) {
         assert!(lp_share_bps >= 0 && lp_share_bps <= BPS_DENOM, "bps out of range");
+        assert!(treasury != lp_address, "treasury and lp_address must differ");
+        assert!(admin != treasury, "admin and treasury must differ");
+        assert!(admin != lp_address, "admin and lp_address must differ");
+        let contract_address = env.current_contract_address();
+        assert!(treasury != contract_address, "treasury must not be the contract address");
+        assert!(lp_address != contract_address, "lp_address must not be the contract address");
+        assert!(admin != contract_address, "admin must not be the contract address");
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Treasury, &treasury);
         env.storage().instance().set(&DataKey::LpAddress, &lp_address);
@@ -73,6 +80,10 @@ impl FeeDistributorContract {
     /// Splits `total_fee` between treasury and LP atomically.
     /// Only the configured `allowed_caller` may invoke this; the caller must
     /// have pre-approved this contract to transfer `total_fee` tokens.
+    ///
+    /// The caller's `require_auth()` (satisfied by the outer contract invocation
+    /// being signed by them) is what authorizes `token.transfer` to move funds
+    /// out of their account. No separate `approve` step is needed.
     pub fn distribute(env: Env, caller: Address, total_fee: i128) {
         caller.require_auth();
         Self::require_allowed_caller(&env, &caller);
