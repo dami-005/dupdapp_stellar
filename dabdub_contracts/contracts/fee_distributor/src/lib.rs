@@ -59,6 +59,12 @@ impl FeeDistributorContract {
         let lp_address: Address = env.storage().instance().get(&DataKey::LpAddress).unwrap();
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
 
+        // Rounding policy: `lp_amount` truncates via integer division, so any
+        // remainder from `total_fee * lp_share_bps / BPS_DENOM` is deliberately
+        // allocated to the treasury (computed as `total_fee - lp_amount`).
+        // This is an intentional policy choice favoring the treasury, not an
+        // implementation detail — do not reorder the arithmetic to shift the
+        // remainder to the LP without an explicit decision to change policy.
         let lp_amount = total_fee
             .checked_mul(lp_share_bps)
             .expect("overflow")
