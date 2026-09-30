@@ -1,9 +1,9 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, Events as _, MockAuth, MockAuthInvoke},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env, IntoVal,
+    Address, Env, IntoVal, Symbol,
 };
 
 use crate::{FeeDistributorContract, FeeDistributorContractClient};
@@ -110,6 +110,44 @@ fn test_update_addresses() {
     // old addresses untouched
     assert_eq!(s.token.balance(&s.treasury), 0);
     assert_eq!(s.token.balance(&s.lp), 0);
+}
+
+#[test]
+fn test_set_lp_share_emits_event() {
+    let s = setup(5_000);
+    s.client.set_lp_share(&s.admin, &2_000);
+    let events = s.env.events().all();
+    let last = events.last().unwrap();
+    assert_eq!(last.1, (Symbol::new(&s.env, "lp_share_set"),).into_val(&s.env));
+    let (old, new): (i128, i128) = last.2.into_val(&s.env);
+    assert_eq!(old, 5_000);
+    assert_eq!(new, 2_000);
+}
+
+#[test]
+fn test_set_treasury_emits_event() {
+    let s = setup(5_000);
+    let new_treasury = Address::generate(&s.env);
+    s.client.set_treasury(&s.admin, &new_treasury);
+    let events = s.env.events().all();
+    let last = events.last().unwrap();
+    assert_eq!(last.1, (Symbol::new(&s.env, "treasury_set"),).into_val(&s.env));
+    let (old, new): (Address, Address) = last.2.into_val(&s.env);
+    assert_eq!(old, s.treasury);
+    assert_eq!(new, new_treasury);
+}
+
+#[test]
+fn test_set_lp_address_emits_event() {
+    let s = setup(5_000);
+    let new_lp = Address::generate(&s.env);
+    s.client.set_lp_address(&s.admin, &new_lp);
+    let events = s.env.events().all();
+    let last = events.last().unwrap();
+    assert_eq!(last.1, (Symbol::new(&s.env, "lp_address_set"),).into_val(&s.env));
+    let (old, new): (Address, Address) = last.2.into_val(&s.env);
+    assert_eq!(old, s.lp);
+    assert_eq!(new, new_lp);
 }
 
 #[test]

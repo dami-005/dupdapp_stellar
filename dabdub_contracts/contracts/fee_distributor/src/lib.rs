@@ -23,6 +23,24 @@ struct FeeDistributedEvent {
     lp_share_bps: i128,
 }
 
+#[contracttype]
+struct LpShareUpdatedEvent {
+    old_bps: i128,
+    new_bps: i128,
+}
+
+#[contracttype]
+struct TreasuryUpdatedEvent {
+    old_treasury: Address,
+    new_treasury: Address,
+}
+
+#[contracttype]
+struct LpAddressUpdatedEvent {
+    old_lp_address: Address,
+    new_lp_address: Address,
+}
+
 #[contract]
 pub struct FeeDistributorContract;
 
@@ -100,21 +118,42 @@ impl FeeDistributorContract {
         caller.require_auth();
         Self::require_admin(&env, &caller);
         assert!(bps >= 0 && bps <= BPS_DENOM, "bps out of range");
+        let old_bps: i128 = env.storage().instance().get(&DataKey::LpShareBps).unwrap();
         env.storage().instance().set(&DataKey::LpShareBps, &bps);
+        env.events().publish(
+            ("FEE_DISTRIBUTOR", "lp_share_updated"),
+            LpShareUpdatedEvent { old_bps, new_bps: bps },
+        );
     }
 
     /// Update treasury address. Admin-only.
     pub fn set_treasury(env: Env, caller: Address, treasury: Address) {
         caller.require_auth();
         Self::require_admin(&env, &caller);
+        let old_treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
         env.storage().instance().set(&DataKey::Treasury, &treasury);
+        env.events().publish(
+            ("FEE_DISTRIBUTOR", "treasury_updated"),
+            TreasuryUpdatedEvent {
+                old_treasury,
+                new_treasury: treasury,
+            },
+        );
     }
 
     /// Update LP address. Admin-only.
     pub fn set_lp_address(env: Env, caller: Address, lp_address: Address) {
         caller.require_auth();
         Self::require_admin(&env, &caller);
+        let old_lp_address: Address = env.storage().instance().get(&DataKey::LpAddress).unwrap();
         env.storage().instance().set(&DataKey::LpAddress, &lp_address);
+        env.events().publish(
+            ("FEE_DISTRIBUTOR", "lp_address_updated"),
+            LpAddressUpdatedEvent {
+                old_lp_address,
+                new_lp_address: lp_address,
+            },
+        );
     }
 
     /// Rotate the address permitted to call `distribute`. Admin-only.
